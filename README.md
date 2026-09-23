@@ -26,8 +26,8 @@ Terms of service and privacy policies are long, and the parts that matter are sp
 Requires Node.js 22 or newer. No `npm install` needed.
 
 ```sh
-git clone https://github.com/REllwood/FineprintFriend.git
-cd FineprintFriend
+git clone https://github.com/REllwood/Fineprint-Friend.git
+cd Fineprint-Friend
 npm start
 ```
 
