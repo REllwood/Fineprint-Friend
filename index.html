@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An offline, evidence-linked reading guide for supplied policy text.">
+  <title>Fineprint Friend</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <a href="#source-input">Fineprint Friend</a>
+    <p>Evidence first. Local rules. No legal conclusions.</p>
+    <button id="limitations-button" type="button">Reading limitations</button>
+  </header>
+
+  <main>
+    <section id="intake" class="intake" aria-labelledby="intake-title">
+      <div class="intake-copy">
+        <p class="folio">Start with the source</p>
+        <h1 id="intake-title">Build a guide you can trace back to every line.</h1>
+        <p>This companion highlights where a focused set of topics may be discussed. It does not determine what a clause means for you.</p>
+      </div>
+      <div class="intake-form">
+        <label for="document-title">Document title</label>
+        <input id="document-title" maxlength="160" value="Untitled supplied document">
+        <label for="source-input">Supplied policy or terms text</label>
+        <textarea id="source-input" rows="14" placeholder="Paste the complete readable source here."></textarea>
+        <div class="intake-actions">
+          <button id="analyse-button" class="primary" type="button">Number and analyse locally</button>
+          <button id="sample-button" type="button">Use synthetic agreement</button>
+        </div>
+        <label for="source-file">Or choose a text or HTML file</label>
+        <input id="source-file" type="file" accept="text/plain,text/html,.txt,.html,.htm">
+        <div id="job-status" class="job-status" role="status">No source analysed.</div>
+        <button id="cancel-job" type="button" hidden>Cancel current work</button>
+      </div>
+    </section>
+
+    <section id="reading-room" class="reading-room" hidden>
+      <nav class="document-nav" aria-label="Reading guide controls">
+        <div>
+          <p class="folio">Local project</p>
+          <h2 id="project-title">Untitled supplied document</h2>
+        </div>
+        <label for="source-search">Find in source</label>
+        <input id="source-search" type="search" placeholder="Search exact source text">
+        <div class="nav-actions">
+          <button id="compare-button" type="button">Compare another version</button>
+          <button id="export-button" type="button">Prepare reading pack</button>
+        </div>
+        <div id="room-job-status" class="job-status" role="status">Ready for local review.</div>
+        <button id="room-cancel-job" type="button" hidden>Cancel current work</button>
+        <p id="project-status">Stored in this browser profile.</p>
+      </nav>
+
+      <section class="source-column" aria-labelledby="source-title">
+        <div class="column-heading">
+          <p class="folio">Primary material</p>
+          <h2 id="source-title">Numbered source</h2>
+        </div>
+        <ol id="source-paragraphs" class="source-paragraphs"></ol>
+      </section>
+
+      <aside class="guide-column" aria-labelledby="guide-title">
+        <div class="column-heading">
+          <p class="folio">Evidence-linked prompts</p>
+          <h2 id="guide-title">Reading guide</h2>
+        </div>
+        <p class="limitation">Rule detection can miss unusual drafting. “Not detected” never means “not present”.</p>
+        <div id="guide"></div>
+        <section class="questions" aria-labelledby="questions-title">
+          <h3 id="questions-title">My questions</h3>
+          <form id="question-form">
+            <label for="question-input">Question for further review</label>
+            <div class="joined">
+              <input id="question-input" maxlength="1000" placeholder="What should I clarify?">
+              <button type="submit">Add</button>
+            </div>
+          </form>
+          <ol id="question-list"></ol>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="work-dialog">
+    <form method="dialog"><button class="dialog-close" value="close">Close</button></form>
+    <div id="dialog-job-status" class="job-status" role="status" hidden></div>
+    <button id="dialog-cancel-job" type="button" hidden>Cancel current work</button>
+    <div id="dialog-content"></div>
+  </dialog>
+  <section id="print-pack" aria-label="Annotated reading pack"></section>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>

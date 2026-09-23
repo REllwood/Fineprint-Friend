@@ -1,0 +1,24 @@
+{
+  "name": "fineprint-friend",
+  "version": "0.1.0",
+  "description": "Turn a long policy into an evidence-linked reading guide and a list of questions worth asking.",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/REllwood/fineprint-friend.git"
+  },
+  "homepage": "https://github.com/REllwood/fineprint-friend#readme",
+  "bugs": {
+    "url": "https://github.com/REllwood/fineprint-friend/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "check": "node scripts/check.mjs"
+  }
+}
