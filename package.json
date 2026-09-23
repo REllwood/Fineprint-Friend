@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/REllwood/fineprint-friend.git"
+    "url": "git+https://github.com/REllwood/FineprintFriend.git"
   },
-  "homepage": "https://github.com/REllwood/fineprint-friend#readme",
+  "homepage": "https://github.com/REllwood/FineprintFriend#readme",
   "bugs": {
-    "url": "https://github.com/REllwood/fineprint-friend/issues"
+    "url": "https://github.com/REllwood/FineprintFriend/issues"
   },
   "type": "module",
   "engines": {
