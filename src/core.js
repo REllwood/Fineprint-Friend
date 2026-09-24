@@ -224,16 +224,25 @@ export function compareSources(previous, current) {
   if (!previous?.paragraphs || !current?.paragraphs) throw new TypeError('Two normalised source documents are required.');
   const left = previous.paragraphs;
   const right = current.paragraphs;
-  if (left.length > 800 || right.length > 800) throw new RangeError('Comparison is limited to 800 paragraphs per version.');
-  const table = Array.from({ length: left.length + 1 }, () => new Uint16Array(right.length + 1));
-  for (let i = left.length - 1; i >= 0; i -= 1) {
-    for (let j = right.length - 1; j >= 0; j -= 1) {
-      table[i][j] = left[i].text === right[j].text
+  if (left.length > MAX_PARAGRAPHS || right.length > MAX_PARAGRAPHS) throw new RangeError(`Comparison is limited to ${MAX_PARAGRAPHS.toLocaleString('en-AU')} paragraphs per version.`);
+  const unchanged = (before, after) => ({ type: 'unchanged', previousId: before.id, currentId: after.id, text: after.text });
+  // Matching opening and closing paragraphs never need the table, which keeps typical comparisons small.
+  let prefix = 0;
+  while (prefix < left.length && prefix < right.length && left[prefix].text === right[prefix].text) prefix += 1;
+  let suffix = 0;
+  while (suffix < left.length - prefix && suffix < right.length - prefix && left[left.length - 1 - suffix].text === right[right.length - 1 - suffix].text) suffix += 1;
+  const middleLeft = left.slice(prefix, left.length - suffix);
+  const middleRight = right.slice(prefix, right.length - suffix);
+  const table = Array.from({ length: middleLeft.length + 1 }, () => new Uint16Array(middleRight.length + 1));
+  for (let i = middleLeft.length - 1; i >= 0; i -= 1) {
+    for (let j = middleRight.length - 1; j >= 0; j -= 1) {
+      table[i][j] = middleLeft[i].text === middleRight[j].text
         ? table[i + 1][j + 1] + 1
         : Math.max(table[i + 1][j], table[i][j + 1]);
     }
   }
   const changes = [];
+  for (let k = 0; k < prefix; k += 1) changes.push(unchanged(left[k], right[k]));
   let removed = [];
   let added = [];
   const flush = () => {
@@ -243,21 +252,22 @@ export function compareSources(previous, current) {
   };
   let i = 0;
   let j = 0;
-  while (i < left.length || j < right.length) {
-    if (i < left.length && j < right.length && left[i].text === right[j].text) {
+  while (i < middleLeft.length || j < middleRight.length) {
+    if (i < middleLeft.length && j < middleRight.length && middleLeft[i].text === middleRight[j].text) {
       flush();
-      changes.push({ type: 'unchanged', previousId: left[i].id, currentId: right[j].id, text: right[j].text });
+      changes.push(unchanged(middleLeft[i], middleRight[j]));
       i += 1;
       j += 1;
-    } else if (j < right.length && (i === left.length || table[i][j + 1] >= table[i + 1][j])) {
-      added.push({ type: 'added', currentId: right[j].id, text: right[j].text });
+    } else if (j < middleRight.length && (i === middleLeft.length || table[i][j + 1] >= table[i + 1][j])) {
+      added.push({ type: 'added', currentId: middleRight[j].id, text: middleRight[j].text });
       j += 1;
     } else {
-      removed.push({ type: 'removed', previousId: left[i].id, text: left[i].text });
+      removed.push({ type: 'removed', previousId: middleLeft[i].id, text: middleLeft[i].text });
       i += 1;
     }
   }
   flush();
+  for (let k = suffix; k > 0; k -= 1) changes.push(unchanged(left[left.length - k], right[right.length - k]));
   const previousCategories = new Set(analyseSource(previous).observations.map(({ categoryId }) => categoryId));
   const currentCategories = new Set(analyseSource(current).observations.map(({ categoryId }) => categoryId));
   return {
