@@ -28,12 +28,18 @@ const publicFiles = new Map([
 
 const server = createServer(async (request, response) => {
   try {
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      response.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'text/plain; charset=utf-8' }).end('Method not allowed');
+      return;
+    }
     const pathname = decodeURIComponent(new URL(request.url ?? '/', `http://${host}`).pathname);
     const target = publicFiles.get(pathname);
     if (!target) {
       response.writeHead(404).end('Not found');
       return;
     }
+    // Read before writing headers so a failed read can still send an error status.
+    const body = await readFile(target);
     response.writeHead(200, {
       'Content-Type': types.get(extname(target)) ?? 'application/octet-stream',
       'Cache-Control': 'no-store',
@@ -41,12 +47,22 @@ const server = createServer(async (request, response) => {
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer'
     });
-    response.end(await readFile(target));
+    response.end(body);
   } catch (error) {
     const missing = error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT';
-    response.writeHead(missing ? 404 : 400, { 'Content-Type': 'text/plain; charset=utf-8' });
-    response.end(missing ? 'Not found' : 'Invalid request');
+    const invalid = error instanceof URIError || error instanceof TypeError;
+    response.writeHead(missing ? 404 : invalid ? 400 : 500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end(missing ? 'Not found' : invalid ? 'Invalid request' : 'Server error');
   }
+});
+
+server.on('error', (error) => {
+  const reasons = {
+    EADDRINUSE: `Port ${port} is already in use. Stop the other process or choose another port, for example: npm start -- --port 4176`,
+    EACCES: `Port ${port} needs extra permissions. Choose a port above 1023, for example: npm start -- --port 4176`
+  };
+  console.error(`Fineprint Friend could not start. ${reasons[error.code] ?? error.message}`);
+  process.exit(1);
 });
 
 server.listen(port, host, () => {
