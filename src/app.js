@@ -1,4 +1,4 @@
-import { analyseSource, compareSources, normaliseSource, readingPack } from './core.js';
+import { analyseSource, compareSources, groupObservations, normaliseSource, readingPack } from './core.js';
 
 const storageKey = 'fineprint-friend:v0.1';
 const sample = `STREAMBIRD SUBSCRIPTION TERMS — SYNTHETIC VERSION ONE
@@ -133,24 +133,34 @@ function renderGuide() {
     empty.textContent = 'No catalogue categories were detected. This does not mean they are absent; read the complete numbered source.';
     elements.guide.append(empty);
   }
-  for (const observation of project.analysis.observations) {
+  for (const group of groupObservations(project.analysis.observations)) {
     const article = document.createElement('article');
     article.className = 'observation';
     const heading = document.createElement('h3');
-    heading.textContent = observation.category;
-    const certainty = document.createElement('span');
-    certainty.className = 'certainty';
-    certainty.textContent = observation.certainty;
+    heading.textContent = group.category;
+    const count = document.createElement('p');
+    count.className = 'observation-count';
+    count.textContent = `Found in ${group.observations.length} ${group.observations.length === 1 ? 'paragraph' : 'paragraphs'}`;
     const prompt = document.createElement('p');
-    prompt.textContent = observation.prompt;
-    const rationale = document.createElement('p');
-    rationale.textContent = observation.rationale;
-    const evidence = document.createElement('button');
-    evidence.type = 'button';
-    evidence.className = 'evidence-button';
-    evidence.textContent = `Show evidence ${observation.paragraphIds.join(', ')}`;
-    evidence.addEventListener('click', () => showEvidence(observation.paragraphIds[0]));
-    article.append(heading, certainty, prompt, rationale, evidence);
+    prompt.textContent = group.prompt;
+    const list = document.createElement('ul');
+    list.className = 'evidence-list';
+    for (const observation of group.observations) {
+      const item = document.createElement('li');
+      const certainty = document.createElement('span');
+      certainty.className = 'certainty';
+      certainty.textContent = observation.certainty;
+      const rationale = document.createElement('p');
+      rationale.textContent = observation.rationale;
+      const evidence = document.createElement('button');
+      evidence.type = 'button';
+      evidence.className = 'evidence-button';
+      evidence.textContent = `Show evidence ${observation.paragraphIds.join(', ')}`;
+      evidence.addEventListener('click', () => showEvidence(observation.paragraphIds[0]));
+      item.append(certainty, rationale, evidence);
+      list.append(item);
+    }
+    article.append(heading, count, prompt, list);
     elements.guide.append(article);
   }
   if (project.analysis.absentCategories.length) {

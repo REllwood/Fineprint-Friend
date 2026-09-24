@@ -57,6 +57,10 @@ label { display: block; font-weight: 750; font-size: .78rem; margin: .85rem 0 .3
 .observation h3 { margin: 0 0 .4rem; font: 700 1.2rem Georgia, serif; }
 .certainty { display: inline-block; background: var(--warm); padding: .2rem .4rem; color: #5f635f; font-size: .7rem; font-weight: 750; }
 .observation p { line-height: 1.55; font-size: .88rem; }
+.observation .observation-count { margin: 0; color: #5f635f; font-size: .75rem; font-weight: 750; }
+.evidence-list { list-style: none; padding: 0; margin: 0; }
+.evidence-list li { border-top: 1px dashed var(--rule); padding: .75rem 0; }
+.evidence-list li p { margin: .45rem 0 .6rem; }
 .evidence-button { border-color: var(--green); color: var(--green); }
 .absent { color: #626865; font-size: .78rem; }
 .questions { margin-top: 2rem; border-top: .25rem solid var(--green); padding-top: 1rem; }
