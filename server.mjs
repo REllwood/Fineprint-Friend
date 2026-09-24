@@ -22,7 +22,8 @@ const publicFiles = new Map([
   ['/src/app.js', resolve(root, 'src/app.js')],
   ['/src/core.js', resolve(root, 'src/core.js')],
   ['/src/samples.js', resolve(root, 'src/samples.js')],
-  ['/src/styles.css', resolve(root, 'src/styles.css')]
+  ['/src/styles.css', resolve(root, 'src/styles.css')],
+  ['/src/worker.js', resolve(root, 'src/worker.js')]
 ]);
 
 const server = createServer(async (request, response) => {
