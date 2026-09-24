@@ -91,20 +91,24 @@ export function normaliseSource(value, source = {}) {
   };
 }
 
+const listFormat = new Intl.ListFormat('en-AU', { type: 'conjunction' });
+
 export function analyseSource(document) {
   if (!document || !Array.isArray(document.paragraphs)) throw new TypeError('A normalised source document is required.');
   const observations = [];
   for (const paragraph of document.paragraphs) {
     for (const category of CLAUSE_CATALOGUE) {
-      const matches = category.terms.filter((term) => term.test(paragraph.text)).map((term) => term.source);
+      const matches = category.terms.map((term) => paragraph.text.match(term)?.[0]).filter(Boolean);
       if (matches.length === 0) continue;
+      const matchedText = [...new Map(matches.map((text) => [text.toLocaleLowerCase('en-AU'), text])).values()];
       observations.push({
         id: `${category.id}:${paragraph.id}`,
         categoryId: category.id,
         category: category.label,
         paragraphIds: [paragraph.id],
         evidence: paragraph.text,
-        rationale: `The local rule matched ${matches.length} catalogue ${matches.length === 1 ? 'expression' : 'expressions'} in paragraph ${paragraph.number}.`,
+        matchedText,
+        rationale: `The local rules matched ${listFormat.format(matchedText.map((text) => `“${text}”`))} in paragraph ${paragraph.number}.`,
         certainty: matches.length >= 2 ? 'multiple rule matches' : 'limited rule match',
         prompt: category.prompt
       });
@@ -184,7 +188,7 @@ export function readingPack(project) {
   ];
   if (project.analysis.observations.length === 0) lines.push('No catalogue categories were detected. This does not mean they are absent.', '');
   for (const observation of project.analysis.observations) {
-    lines.push(`### ${escapeMarkdown(observation.category)}`, '', escapeMarkdown(observation.prompt), '', `Evidence ${observation.paragraphIds.map(escapeMarkdown).join(', ')} (${escapeMarkdown(observation.certainty)}):`, '', `> ${escapeMarkdown(observation.evidence)}`, '');
+    lines.push(`### ${escapeMarkdown(observation.category)}`, '', escapeMarkdown(observation.prompt), '', `Evidence ${observation.paragraphIds.map(escapeMarkdown).join(', ')} (${escapeMarkdown(observation.certainty)}):`, '', `> ${escapeMarkdown(observation.evidence)}`, '', escapeMarkdown(observation.rationale), '');
   }
   lines.push('## My questions', '');
   if (questions.length === 0) lines.push('- No questions recorded.');

@@ -48,6 +48,19 @@ test('every observation links to exact source evidence and states rule certainty
   }
 });
 
+test('observations record the wording each rule matched', () => {
+  const document = normaliseSource(versionOneText);
+  const renewal = analyseSource(document).observations.find(({ id }) => id === 'renewal:p2');
+  assert.deepEqual(renewal.matchedText, ['automatically renews', 'recurring']);
+  assert.equal(renewal.rationale, 'The local rules matched “automatically renews” and “recurring” in paragraph 2.');
+  for (const observation of analyseSource(document).observations) {
+    assert.ok(observation.matchedText.length > 0);
+    for (const text of observation.matchedText) assert.ok(observation.evidence.includes(text), `${text} should appear in the evidence`);
+  }
+  const pack = readingPack({ document, analysis: analyseSource(document), questions: [] });
+  assert.match(pack, /The local rules matched “automatically renews” and “recurring” in paragraph 2\\\./);
+});
+
 const categoriesIn = (text) => analyseSource(normaliseSource(text)).observations.map(({ categoryId }) => categoryId);
 
 test('catalogue recognises common alternative wording', () => {
