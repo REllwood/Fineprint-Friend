@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CLAUSE_CATALOGUE, analyseSource, compareSources, groupObservations, normaliseSource, readingPack } from '../src/core.js';
+import { CLAUSE_CATALOGUE, analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from '../src/core.js';
 
 const versionOneText = `Synthetic subscription terms
 
@@ -133,6 +133,17 @@ test('reading pack includes evidence, source and explicit limitations without a 
   assert.match(pack, /not legal advice/i);
   assert.match(pack, /Which cancellation clock applies/);
   assert.doesNotMatch(pack, /safety score|safe contract/i);
+});
+
+test('reading pack model keeps plain text for the print view', () => {
+  const document = normaliseSource('You may cancel at least 48 hours before renewal.', { title: 'Terms v1.2 - draft', acquiredAt: '2026-09-24T01:02:03.000Z' });
+  const model = readingPackModel({ document, analysis: analyseSource(document), questions: ['  Is it 48 hours?  ', ''] });
+  assert.equal(model.title, 'Terms v1.2 - draft');
+  assert.deepEqual(model.details.find(([label]) => label === 'Source date'), ['Source date', '2026-09-24T01:02:03.000Z']);
+  assert.equal(model.guide[0].evidence[0].text, 'You may cancel at least 48 hours before renewal.');
+  assert.deepEqual(model.questions, ['Is it 48 hours?']);
+  assert.deepEqual(model.paragraphs, [{ id: 'p1', text: 'You may cancel at least 48 hours before renewal.' }]);
+  assert.equal(JSON.stringify(model).includes('\\\\'), false);
 });
 
 test('reading pack escapes untrusted Markdown in metadata, evidence, questions and source', () => {

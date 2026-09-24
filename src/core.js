@@ -175,34 +175,48 @@ function escapeMarkdown(value) {
     .replace(/([\\`*_{}\[\]()<>#+.!|>-])/gu, '\\$1');
 }
 
-export function readingPack(project) {
+// The pack's content as plain text, shared by the Markdown export and the print view.
+export function readingPackModel(project) {
   if (!project?.document?.paragraphs || !project?.analysis?.observations) throw new TypeError('An analysed project is required.');
   const questions = Array.isArray(project.questions)
     ? project.questions.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim().slice(0, 1_000)).slice(0, 100)
     : [];
-  const lines = [
-    `# ${escapeMarkdown(project.document.title)}`,
-    '',
-    'Informational reading guide. It may be incomplete and is not legal advice. It does not judge fairness, enforceability or safety.',
-    '',
-    `Source method: ${escapeMarkdown(project.document.method)}`,
-    `Source date: ${escapeMarkdown(project.document.acquiredAt)}`,
-    `Catalogue version: ${project.analysis.catalogueVersion}`,
-    '',
-    '## Reading guide',
-    ''
-  ];
-  if (project.analysis.observations.length === 0) lines.push('No catalogue categories were detected. This does not mean they are absent.', '');
-  for (const group of groupObservations(project.analysis.observations)) {
+  return {
+    title: project.document.title,
+    disclaimer: 'Informational reading guide. It may be incomplete and is not legal advice. It does not judge fairness, enforceability or safety.',
+    details: [
+      ['Source method', project.document.method],
+      ['Source date', project.document.acquiredAt],
+      ['Catalogue version', String(project.analysis.catalogueVersion)]
+    ],
+    guide: groupObservations(project.analysis.observations).map((group) => ({
+      category: group.category,
+      prompt: group.prompt,
+      evidence: group.observations.map(({ paragraphIds, certainty, evidence, rationale }) => ({ paragraphIds, certainty, text: evidence, rationale }))
+    })),
+    emptyGuideNote: 'No catalogue categories were detected. This does not mean they are absent.',
+    questions,
+    noQuestionsNote: 'No questions recorded.',
+    paragraphs: project.document.paragraphs.map(({ id, text }) => ({ id, text }))
+  };
+}
+
+export function readingPack(project) {
+  const pack = readingPackModel(project);
+  const lines = [`# ${escapeMarkdown(pack.title)}`, '', pack.disclaimer, ''];
+  pack.details.forEach(([label, value]) => lines.push(`${label}: ${escapeMarkdown(value)}`));
+  lines.push('', '## Reading guide', '');
+  if (pack.guide.length === 0) lines.push(pack.emptyGuideNote, '');
+  for (const group of pack.guide) {
     lines.push(`### ${escapeMarkdown(group.category)}`, '', escapeMarkdown(group.prompt), '');
-    for (const observation of group.observations) {
-      lines.push(`Evidence ${observation.paragraphIds.map(escapeMarkdown).join(', ')} (${escapeMarkdown(observation.certainty)}):`, '', `> ${escapeMarkdown(observation.evidence)}`, '', escapeMarkdown(observation.rationale), '');
+    for (const item of group.evidence) {
+      lines.push(`Evidence ${item.paragraphIds.map(escapeMarkdown).join(', ')} (${escapeMarkdown(item.certainty)}):`, '', `> ${escapeMarkdown(item.text)}`, '', escapeMarkdown(item.rationale), '');
     }
   }
   lines.push('## My questions', '');
-  if (questions.length === 0) lines.push('- No questions recorded.');
-  else questions.forEach((question) => lines.push(`- ${escapeMarkdown(question)}`));
+  if (pack.questions.length === 0) lines.push(`- ${pack.noQuestionsNote}`);
+  else pack.questions.forEach((question) => lines.push(`- ${escapeMarkdown(question)}`));
   lines.push('', '## Numbered source', '');
-  project.document.paragraphs.forEach((paragraph) => lines.push(`${escapeMarkdown(paragraph.id)}\. ${escapeMarkdown(paragraph.text)}`, ''));
+  pack.paragraphs.forEach(({ id, text }) => lines.push(`${escapeMarkdown(id)}. ${escapeMarkdown(text)}`, ''));
   return lines.join('\n').trim();
 }

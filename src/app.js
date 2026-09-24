@@ -1,4 +1,4 @@
-import { analyseSource, compareSources, groupObservations, normaliseSource, readingPack } from './core.js';
+import { analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from './core.js';
 
 const storageKey = 'fineprint-friend:v0.1';
 const sample = `STREAMBIRD SUBSCRIPTION TERMS — SYNTHETIC VERSION ONE
@@ -350,7 +350,43 @@ function download(content) {
   link.href = url;
   link.download = 'fineprint-reading-pack.md';
   link.click();
-  URL.revokeObjectURL(url);
+  // Revoking in the same task can cancel the download in some browsers.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+function renderPrintPack(pack) {
+  const create = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+  const details = create('dl');
+  for (const [label, value] of pack.details) details.append(create('dt', label), create('dd', value));
+  const nodes = [create('h1', pack.title), create('p', pack.disclaimer, 'print-note'), details, create('h2', 'Reading guide')];
+  if (pack.guide.length === 0) nodes.push(create('p', pack.emptyGuideNote, 'print-note'));
+  for (const group of pack.guide) {
+    nodes.push(create('h3', group.category), create('p', group.prompt));
+    for (const item of group.evidence) {
+      nodes.push(create('p', `Evidence ${item.paragraphIds.join(', ')} (${item.certainty})`, 'print-evidence'), create('blockquote', item.text), create('p', item.rationale, 'print-rationale'));
+    }
+  }
+  nodes.push(create('h2', 'My questions'));
+  if (pack.questions.length === 0) nodes.push(create('p', pack.noQuestionsNote, 'print-note'));
+  else {
+    const questions = create('ul');
+    pack.questions.forEach((question) => questions.append(create('li', question)));
+    nodes.push(questions);
+  }
+  nodes.push(create('h2', 'Numbered source'));
+  const source = create('ol', undefined, 'print-source');
+  for (const paragraph of pack.paragraphs) {
+    const item = create('li', paragraph.text);
+    item.dataset.label = paragraph.id;
+    source.append(item);
+  }
+  nodes.push(source);
+  elements.printPack.replaceChildren(...nodes);
 }
 
 async function preparePack() {
@@ -382,10 +418,10 @@ async function preparePack() {
   print.addEventListener('click', async () => {
     const output = await runJob('preparing print view', async (signal) => {
       if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-      return readingPack(project);
+      return readingPackModel(project);
     });
     if (!output) return;
-    elements.printPack.textContent = output;
+    renderPrintPack(output);
     window.print();
   });
   actions.append(markdown, print);

@@ -92,5 +92,19 @@ dialog::backdrop { background: rgba(24,32,29,.55); }
 }
 @media print {
   body > :not(#print-pack) { display: none !important; }
-  #print-pack { display: block; max-width: 45rem; margin: auto; white-space: pre-wrap; font: 11pt/1.55 Georgia, serif; }
+  #print-pack { display: block; max-width: 45rem; margin: auto; font: 11pt/1.55 Georgia, serif; color: #000; }
+  #print-pack h1 { font-size: 20pt; line-height: 1.2; margin: 0 0 .6rem; }
+  #print-pack h2 { font-size: 14pt; margin: 1.6rem 0 .6rem; padding-bottom: .2rem; border-bottom: 1px solid #000; break-after: avoid; }
+  #print-pack h3 { font-size: 12pt; margin: 1.2rem 0 .3rem; break-after: avoid; }
+  #print-pack p { margin: .3rem 0; }
+  #print-pack dl { display: grid; grid-template-columns: max-content 1fr; gap: .1rem 1rem; margin: .8rem 0; }
+  #print-pack dt { font-weight: 700; }
+  #print-pack dd { margin: 0; }
+  #print-pack blockquote { margin: .3rem 0 .3rem 1rem; padding-left: .8rem; border-left: 3px solid #888; break-inside: avoid; }
+  #print-pack .print-note { font-style: italic; }
+  #print-pack .print-evidence { margin-top: .8rem; font-weight: 700; break-after: avoid; }
+  #print-pack .print-rationale { font-size: 9.5pt; color: #333; }
+  #print-pack .print-source { list-style: none; padding: 0; }
+  #print-pack .print-source li { margin-bottom: .5rem; break-inside: avoid; }
+  #print-pack .print-source li::before { content: attr(data-label) ". "; font-weight: 700; }
 }
