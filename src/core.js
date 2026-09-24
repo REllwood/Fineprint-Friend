@@ -57,15 +57,29 @@ export function normaliseSource(value, source = {}) {
   if (typeof value !== 'string') throw new TypeError('Source material must be text.');
   if (value.length > MAX_DOCUMENT_CHARACTERS) throw new RangeError(`Documents are limited to ${MAX_DOCUMENT_CHARACTERS.toLocaleString('en-AU')} characters.`);
   const cleaned = value.replace(/\r\n?/g, '\n').replace(/\0/g, '\uFFFD').trim();
-  const rawParagraphs = cleaned ? cleaned.split(/\n\s*\n+/u).map((text) => text.replace(/\s*\n\s*/g, ' ').replace(/\s+/gu, ' ').trim()).filter(Boolean) : [];
-  if (rawParagraphs.length > MAX_PARAGRAPHS) throw new RangeError(`Documents are limited to ${MAX_PARAGRAPHS.toLocaleString('en-AU')} paragraphs.`);
-  let offset = 0;
-  const paragraphs = rawParagraphs.map((text, index) => {
-    const start = cleaned.indexOf(text, offset);
-    const safeStart = start >= 0 ? start : offset;
-    offset = safeStart + text.length;
-    return { id: `p${index + 1}`, number: index + 1, text, start: safeStart, end: safeStart + text.length };
-  });
+  // Paragraphs are separated by blank lines. start/end index the paragraph's span in `text`;
+  // the paragraph's own text has its internal whitespace collapsed.
+  const spans = [];
+  let cursor = 0;
+  for (const separator of cleaned.matchAll(/\n\s*\n/gu)) {
+    spans.push([cursor, separator.index]);
+    cursor = separator.index + separator[0].length;
+  }
+  spans.push([cursor, cleaned.length]);
+  const trimmedSpans = spans
+    .map(([start, end]) => {
+      const raw = cleaned.slice(start, end);
+      return [start + raw.length - raw.trimStart().length, end - (raw.length - raw.trimEnd().length)];
+    })
+    .filter(([start, end]) => end > start);
+  if (trimmedSpans.length > MAX_PARAGRAPHS) throw new RangeError(`Documents are limited to ${MAX_PARAGRAPHS.toLocaleString('en-AU')} paragraphs.`);
+  const paragraphs = trimmedSpans.map(([start, end], index) => ({
+    id: `p${index + 1}`,
+    number: index + 1,
+    text: cleaned.slice(start, end).replace(/\s+/gu, ' '),
+    start,
+    end
+  }));
   return {
     version: 1,
     title: typeof source.title === 'string' && source.title.trim() ? source.title.trim().slice(0, 160) : 'Untitled supplied document',
