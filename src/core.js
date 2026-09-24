@@ -1,41 +1,54 @@
 export const MAX_DOCUMENT_CHARACTERS = 400_000;
 export const MAX_PARAGRAPHS = 2_000;
+export const CATALOGUE_VERSION = 2;
 
 export const CLAUSE_CATALOGUE = [
   {
     id: 'renewal',
     label: 'Renewal and recurring terms',
-    terms: [/\bautomatic(?:ally)? renew\w*/iu, /\brenewal\b/iu, /\brecurring\b/iu],
+    terms: [/\bauto(?:matic(?:ally)?)?[- ]?renew\w*/iu, /\brenew(?:s|ed)? automatically\b/iu, /\brenewals?\b/iu, /\brecurring\b/iu],
     prompt: 'Check when renewal occurs, how notice is given and whether the text describes a way to prevent the next renewal.'
   },
   {
     id: 'cancellation',
     label: 'Cancellation and termination',
-    terms: [/\bcancel(?:lation|led|ing)?\b/iu, /\bterminat(?:e|ion)\b/iu, /\bnotice period\b/iu],
+    terms: [/\bcancel(?:s|led|ed|ling|ing|lations?)?\b/iu, /\bterminat(?:e[sd]?|ing|ions?)\b/iu, /\bnotice period\b/iu],
     prompt: 'Locate the stated cancellation steps, timing and any conditions. Record questions where the process is unclear.'
   },
   {
     id: 'data-use',
     label: 'Data use and sharing',
-    terms: [/\bpersonal (?:data|information)\b/iu, /\bthird part(?:y|ies)\b/iu, /\bshare[ds]?\b/iu, /\bdisclos\w*\b/iu],
+    terms: [
+      /\bpersonal (?:data|information)\b/iu,
+      /\bthird[- ]part(?:y|ies)\b/iu,
+      /\bshar(?:e[ds]?|ing)\b/iu,
+      /\bdisclos\w*/iu,
+      /\b(?:sell|sells|selling|sold)\b[^.]{0,40}\b(?:data|information)\b/iu
+    ],
     prompt: 'Identify the data described, the stated purposes and the recipients named in the source passage.'
   },
   {
     id: 'disputes',
     label: 'Disputes and governing terms',
-    terms: [/\barbitration\b/iu, /\bgovern(?:ing|ed by) (?:the )?law\b/iu, /\bjurisdiction\b/iu, /\bdisputes?\b/iu],
+    terms: [
+      /\barbitrat\w*/iu,
+      /\bgovern(?:s|ed|ing)?\b[^.]{0,60}\blaws?\b|\blaws?\b[^.]{0,60}\bgovern(?:s|ed|ing)?\b/iu,
+      /\bjurisdictions?\b/iu,
+      /\bdisputes?\b/iu,
+      /\bclass action\b/iu
+    ],
     prompt: 'Note the process and location described for disputes, then ask a qualified adviser how it may apply to your circumstances.'
   },
   {
     id: 'liability',
     label: 'Liability and responsibility',
-    terms: [/\bliabilit\w*\b/iu, /\bindemnif\w*\b/iu, /\bwarrant(?:y|ies)\b/iu, /\bdamages\b/iu],
+    terms: [/\bliabilit\w*/iu, /\bliable\b/iu, /\bindemni\w*/iu, /\bwarrant(?:y|ies)\b/iu, /\bdamages?\b/iu],
     prompt: 'Read which losses, responsibilities or remedies the text discusses and note any terms that need professional interpretation.'
   },
   {
     id: 'fees',
     label: 'Fees and price changes',
-    terms: [/\bfee[s]?\b/iu, /\bprice change\w*\b/iu, /\bcharg(?:e|ed|es)\b/iu, /\brefund\b/iu],
+    terms: [/\bfees?\b/iu, /\bpric(?:e|es|ing)\b/iu, /\bcharg(?:e|es|ed|ing)\b/iu, /\b(?:non-?)?refund\w*/iu, /\bbill(?:ed|ing)\b/iu],
     prompt: 'Check when charges occur, how price changes are communicated and what the source says about refunds.'
   }
 ];
@@ -84,7 +97,7 @@ export function analyseSource(document) {
     }
   }
   return {
-    catalogueVersion: 1,
+    catalogueVersion: CATALOGUE_VERSION,
     observations,
     absentCategories: CLAUSE_CATALOGUE.filter((category) => !observations.some((item) => item.categoryId === category.id)).map(({ id, label }) => ({ id, label })),
     limitation: 'Rule detection can miss unusual drafting. A category not detected may still be present.'
