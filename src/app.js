@@ -1,4 +1,4 @@
-import { CLAUSE_CATALOGUE, MAX_DOCUMENT_CHARACTERS, analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from './core.js';
+import { CLAUSE_CATALOGUE, MAX_DOCUMENT_CHARACTERS, analyseSource, groupObservations, normaliseSource } from './core.js';
 import { SAMPLE_TITLE, SAMPLE_V1, SAMPLE_V2 } from './samples.js';
 
 const storageKey = 'fineprint-friend:v0.1';
@@ -30,9 +30,13 @@ const elements = {
   printPack: document.querySelector('#print-pack')
 };
 
+const LOADING_DELAY = 200;
+
 let project = null;
 let activeController = null;
 let sourceMethod = 'pasted text';
+let engine = null;
+let requestCount = 0;
 
 const isHtmlFile = (file) => file.type === 'text/html' || /\.html?$/iu.test(file.name);
 
@@ -49,28 +53,68 @@ function setStatus(message, loading = false) {
   elements.dialogCancel.hidden = !loading;
 }
 
-async function runJob(label, work) {
+// Only one job runs at a time; starting another cancels the one in progress.
+async function runJob(label, work, doneMessage) {
   activeController?.abort();
   const controller = new AbortController();
   activeController = controller;
-  setStatus(`Loading: ${label}`, true);
+  // Quick jobs finish before the loading state (and its cancel button) would flash up.
+  const reveal = window.setTimeout(() => setStatus(`${label}…`, true), LOADING_DELAY);
   try {
-    await new Promise((resolve, reject) => {
-      const timer = window.setTimeout(resolve, 50);
-      controller.signal.addEventListener('abort', () => {
-        window.clearTimeout(timer);
-        reject(new DOMException('Cancelled', 'AbortError'));
-      }, { once: true });
-    });
     const value = await work(controller.signal);
-    setStatus(`${label} complete.`);
+    if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+    setStatus(doneMessage);
     return value;
   } catch (error) {
-    setStatus(error.name === 'AbortError' ? `${label} cancelled. Existing source retained.` : `${label} failed: ${error.message}`);
+    // A job replaced by a newer one stays quiet so it cannot overwrite the newer job's status.
+    if (activeController === controller) setStatus(error.name === 'AbortError' ? `${label} cancelled. Existing source retained.` : `${label} failed: ${error.message}`);
     return null;
   } finally {
+    window.clearTimeout(reveal);
     if (activeController === controller) activeController = null;
   }
+}
+
+function runInEngine(task, payload, signal) {
+  engine ??= new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+  const worker = engine;
+  const id = (requestCount += 1);
+  return new Promise((resolve, reject) => {
+    const stop = () => {
+      worker.terminate();
+      if (engine === worker) engine = null;
+    };
+    const cleanup = () => {
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+      signal.removeEventListener('abort', onAbort);
+    };
+    const onMessage = ({ data }) => {
+      if (data.id !== id) return;
+      cleanup();
+      if (data.error) reject(Object.assign(new Error(data.error.message), { name: data.error.name }));
+      else resolve(data.value);
+    };
+    const onError = (event) => {
+      event.preventDefault();
+      cleanup();
+      stop();
+      reject(new Error(event.message || 'The local analysis engine could not start.'));
+    };
+    const onAbort = () => {
+      cleanup();
+      stop();
+      reject(new DOMException('Cancelled', 'AbortError'));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
+    signal.addEventListener('abort', onAbort, { once: true });
+    worker.postMessage({ id, task, payload });
+  });
 }
 
 // Only the source and questions are stored; restore() re-runs the analysis from the text.
@@ -192,14 +236,10 @@ function renderProject() {
 }
 
 async function analyse(text, title, method = 'pasted text') {
-  const result = await runJob('numbering source and running local clause rules', async (signal) => {
-    const documentModel = normaliseSource(text, { title, acquiredAt: new Date().toISOString(), method });
-    if (documentModel.paragraphs.length === 0) throw new RangeError('No readable text paragraphs were supplied.');
-    if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-    return { document: documentModel, analysis: analyseSource(documentModel), questions: [] };
-  });
+  const source = { title, acquiredAt: new Date().toISOString(), method };
+  const result = await runJob('Numbering the source and running local clause rules', (signal) => runInEngine('analyse', { text, source }, signal), 'Analysis complete.');
   if (!result) return;
-  project = result;
+  project = { ...result, questions: [] };
   renderProject();
   try {
     persist();
@@ -355,12 +395,8 @@ async function compareVersion() {
   button.textContent = 'Compare versions locally';
   const output = document.createElement('div');
   button.addEventListener('click', async () => {
-    const comparison = await runJob('comparing preserved versions', async (signal) => {
-      const next = normaliseSource(textarea.value, { title: `${project.document.title} — comparison`, acquiredAt: new Date().toISOString(), method: 'comparison paste' });
-      if (next.paragraphs.length === 0) throw new RangeError('Paste the newer version before comparing.');
-      if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-      return compareSources(project.document, next);
-    });
+    const source = { title: `${project.document.title} — comparison`, acquiredAt: new Date().toISOString(), method: 'comparison paste' };
+    const comparison = await runJob('Comparing versions', (signal) => runInEngine('compare', { previous: project.document, text: textarea.value, source }, signal), 'Comparison complete.');
     if (comparison) renderComparison(comparison, output);
   });
   elements.dialogContent.append(heading, explanation, label, textarea, button, output);
@@ -413,10 +449,7 @@ function renderPrintPack(pack) {
 }
 
 async function preparePack() {
-  const pack = await runJob('preparing evidence-linked reading pack', async (signal) => {
-    if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-    return readingPack(project);
-  });
+  const pack = await runJob('Preparing the reading pack', (signal) => runInEngine('pack', { project }, signal), 'Reading pack ready.');
   if (!pack) return;
   elements.dialogContent.replaceChildren();
   const heading = document.createElement('h2');
@@ -428,28 +461,17 @@ async function preparePack() {
   const markdown = document.createElement('button');
   markdown.type = 'button';
   markdown.textContent = 'Download Markdown';
-  markdown.addEventListener('click', async () => {
-    const output = await runJob('preparing Markdown download', async (signal) => {
-      if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-      return readingPack(project);
-    });
-    if (output) download(output);
-  });
+  markdown.addEventListener('click', () => download(pack.markdown));
   const print = document.createElement('button');
   print.type = 'button';
   print.textContent = 'Print or save as PDF';
-  print.addEventListener('click', async () => {
-    const output = await runJob('preparing print view', async (signal) => {
-      if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-      return readingPackModel(project);
-    });
-    if (!output) return;
-    renderPrintPack(output);
+  print.addEventListener('click', () => {
+    renderPrintPack(pack.model);
     window.print();
   });
   actions.append(markdown, print);
   const preview = document.createElement('pre');
-  preview.textContent = pack;
+  preview.textContent = pack.markdown;
   elements.dialogContent.append(heading, disclosure, actions, preview);
   elements.dialog.showModal();
 }
@@ -466,7 +488,7 @@ document.querySelector('#sample-button').addEventListener('click', () => {
 elements.file.addEventListener('change', async () => {
   const file = elements.file.files?.[0];
   if (!file) return;
-  const text = await runJob('reading local source file', async (signal) => {
+  const text = await runJob('Reading the local file', async (signal) => {
     // The document limit is on extracted text; the file limit only guards against huge downloads of markup.
     if (file.size > MAX_FILE_BYTES) throw new RangeError(`Source files are limited to ${(MAX_FILE_BYTES / 1_000_000).toLocaleString('en-AU')} MB.`);
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
@@ -477,7 +499,7 @@ elements.file.addEventListener('change', async () => {
       throw new RangeError(`The file has ${extracted.length.toLocaleString('en-AU')} characters of text. Documents are limited to ${MAX_DOCUMENT_CHARACTERS.toLocaleString('en-AU')} characters.`);
     }
     return extracted;
-  });
+  }, 'Local file read.');
   if (text !== null) {
     elements.input.value = text;
     sourceMethod = isHtmlFile(file) ? 'local HTML file' : 'local text file';
