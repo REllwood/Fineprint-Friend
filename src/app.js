@@ -107,9 +107,19 @@ function renderSource() {
   }
 }
 
+function applySearch() {
+  const query = elements.search.value.trim().toLocaleLowerCase('en-AU');
+  for (const item of elements.source.children) item.classList.toggle('filtered-out', Boolean(query) && !item.textContent.toLocaleLowerCase('en-AU').includes(query));
+}
+
 function showEvidence(paragraphId) {
   const target = document.querySelector(`#source-${CSS.escape(paragraphId)}`);
   if (!target) return;
+  if (target.classList.contains('filtered-out')) {
+    elements.search.value = '';
+    applySearch();
+    setStatus(`Search cleared to show evidence ${paragraphId}.`);
+  }
   for (const item of elements.source.children) item.classList.remove('highlight');
   target.classList.add('highlight');
   target.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -397,10 +407,7 @@ elements.file.addEventListener('change', async () => {
     setStatus('Local file extracted as plain text. Review it, then analyse locally.');
   }
 });
-elements.search.addEventListener('input', () => {
-  const query = elements.search.value.trim().toLocaleLowerCase('en-AU');
-  for (const item of elements.source.children) item.classList.toggle('filtered-out', Boolean(query) && !item.textContent.toLocaleLowerCase('en-AU').includes(query));
-});
+elements.search.addEventListener('input', applySearch);
 elements.questionForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const question = elements.questionInput.value.trim().slice(0, 1000);
