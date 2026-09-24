@@ -38,6 +38,36 @@ test('every observation links to exact source evidence and states rule certainty
   }
 });
 
+const categoriesIn = (text) => analyseSource(normaliseSource(text)).observations.map(({ categoryId }) => categoryId);
+
+test('catalogue recognises common alternative wording', () => {
+  const expectations = [
+    ['These terms are governed by the laws of New South Wales.', 'disputes'],
+    ['These terms are governed by and construed in accordance with the laws of Victoria.', 'disputes'],
+    ['The laws of Victoria govern these terms.', 'disputes'],
+    ['You waive any right to bring a class action.', 'disputes'],
+    ['Usage data goes to third-party vendors.', 'data-use'],
+    ['We sell your information to advertisers.', 'data-use'],
+    ['You may request refunds within 14 days.', 'fees'],
+    ['Annual plans are non-refundable.', 'fees'],
+    ['We will notify you before charging your card.', 'fees'],
+    ['Prices may change with notice.', 'fees'],
+    ['Your subscription was canceled.', 'cancellation'],
+    ['Your account is terminated immediately.', 'cancellation'],
+    ['Plans renew automatically each year.', 'renewal'],
+    ['Auto-renewal is on by default.', 'renewal'],
+    ['We are not liable for indirect loss.', 'liability'],
+    ['You provide an indemnity for claims arising from your use.', 'liability']
+  ];
+  for (const [text, category] of expectations) assert.ok(categoriesIn(text).includes(category), `expected ${category} for: ${text}`);
+});
+
+test('catalogue avoids common look-alike words', () => {
+  assert.deepEqual(categoriesIn('Products sold in our stores are listed online.'), []);
+  assert.deepEqual(categoriesIn('The government publishes guidance.'), []);
+  assert.deepEqual(categoriesIn('To the extent described by applicable law, see the order page.'), []);
+});
+
 test('absence is explicitly incomplete rather than a conclusion', () => {
   const analysis = analyseSource(normaliseSource('A short unrelated sentence.'));
   assert.equal(analysis.observations.length, 0);
