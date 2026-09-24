@@ -34,6 +34,8 @@ npm start
 
 Open http://127.0.0.1:4175. The `fixtures` folder has two versions of a sample streaming-service agreement to try the comparison on.
 
+If port 4175 is taken, pick another with `npm start -- --port 4176` (or set `PORT`).
+
 ## Status
 
 v0.1 uses local rules only. Next up are an optional on-device language model, question packs for specific countries, and a way to watch a policy for changes.
@@ -41,7 +43,7 @@ v0.1 uses local rules only. Next up are an optional on-device language model, qu
 ## Development
 
 ```sh
-npm test        # clause detection and comparison tests
+npm test        # clause detection, comparison and server tests
 npm run check   # tests plus syntax checks
 ```
 
