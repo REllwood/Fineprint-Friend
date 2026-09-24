@@ -73,8 +73,16 @@ async function runJob(label, work) {
   }
 }
 
+// Only the source and questions are stored; restore() re-runs the analysis from the text.
 function persist() {
-  localStorage.setItem(storageKey, JSON.stringify(project));
+  const { title, acquiredAt, method, text } = project.document;
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({ version: 2, document: { title, acquiredAt, method, text }, questions: project.questions }));
+  } catch (error) {
+    if (error?.name === 'QuotaExceededError') throw new Error('this browser’s storage is full. Prepare a reading pack to keep a copy.');
+    if (error?.name === 'SecurityError') throw new Error('this browser is blocking local storage. Prepare a reading pack to keep a copy.');
+    throw error;
+  }
   elements.projectStatus.textContent = `Saved locally at ${new Date().toLocaleTimeString('en-AU')}. Source and questions remain in this browser profile.`;
 }
 
