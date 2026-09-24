@@ -77,6 +77,12 @@ dialog::backdrop { background: rgba(24,32,29,.55); }
 .comparison li { padding: .6rem; border-bottom: 1px solid var(--rule); white-space: pre-wrap; }
 .comparison .added { background: #e3eee8; }
 .comparison .removed { background: #f5dfd7; }
+.comparison .modified { background: var(--warm); }
+.comparison-summary { font-weight: 750; }
+.change-label { margin: 0 0 .3rem; font-size: .75rem; font-weight: 750; color: #4f5753; }
+.change-text { margin: 0; line-height: 1.55; }
+.change-text del { background: #f5dfd7; color: #6d2a17; }
+.change-text ins { background: #cfe5d8; color: #1f4435; text-decoration: none; font-weight: 700; }
 .export-actions, .dialog-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
 #print-pack { display: none; }
 @media (max-width: 900px) {

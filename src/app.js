@@ -1,29 +1,8 @@
-import { analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from './core.js';
+import { CLAUSE_CATALOGUE, analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from './core.js';
+import { SAMPLE_TITLE, SAMPLE_V1, SAMPLE_V2 } from './samples.js';
 
 const storageKey = 'fineprint-friend:v0.1';
-const sample = `STREAMBIRD SUBSCRIPTION TERMS — SYNTHETIC VERSION ONE
-
-Your subscription automatically renews each month and the monthly fee is charged on the renewal date.
-
-You may cancel through the account page at least 48 hours before the next renewal. Cancellation takes effect at the end of the current paid period.
-
-We use personal information to provide the service. We may share account identifiers with third-party payment and hosting providers for those stated purposes.
-
-To the extent described by applicable law, our liability for service interruption is limited to fees paid in the previous month.
-
-These synthetic terms are governed by the law stated on your order page. Contact support with questions.`;
-
-const sampleV2 = `STREAMBIRD SUBSCRIPTION TERMS — SYNTHETIC VERSION TWO
-
-Your subscription automatically renews each month and the monthly fee is charged on the renewal date.
-
-You may cancel through the account page at least 7 days before the next renewal. Cancellation takes effect at the end of the current paid period.
-
-We use personal information to provide the service. We may share account identifiers with third-party payment, analytics and hosting providers for those stated purposes.
-
-To the extent described by applicable law, our liability for service interruption is limited to fees paid in the previous month.
-
-Disputes are handled through the process stated on your order page. Contact support with questions.`;
+const sampleMethod = 'synthetic sample';
 
 const elements = {
   title: document.querySelector('#document-title'),
@@ -52,6 +31,9 @@ const elements = {
 
 let project = null;
 let activeController = null;
+let sourceMethod = 'pasted text';
+
+const isHtmlFile = (file) => file.type === 'text/html' || /\.html?$/iu.test(file.name);
 
 function setStatus(message, loading = false) {
   elements.status.textContent = message;
@@ -224,6 +206,7 @@ function showIntake() {
   elements.search.value = '';
   elements.title.value = 'Untitled supplied document';
   elements.input.value = '';
+  sourceMethod = 'pasted text';
   elements.room.hidden = true;
   elements.intake.hidden = false;
   elements.input.focus();
@@ -297,6 +280,53 @@ function plainTextFromHtml(html) {
   return body.textContent.replace(/[^\S\n]*\n[^\S\n]*\n\s*/gu, '\n\n').trim();
 }
 
+const categoryLabel = (id) => CLAUSE_CATALOGUE.find((category) => category.id === id)?.label ?? id;
+
+function renderComparison(comparison, output) {
+  output.replaceChildren();
+  const count = (type) => comparison.changes.filter((change) => change.type === type).length;
+  const limitation = document.createElement('p');
+  limitation.textContent = comparison.limitation;
+  const summary = document.createElement('p');
+  summary.className = 'comparison-summary';
+  summary.textContent = `${count('modified')} changed, ${count('added')} added, ${count('removed')} removed and ${count('unchanged')} unchanged paragraphs.`;
+  const categories = document.createElement('p');
+  const labels = (ids) => ids.map(categoryLabel).join('; ') || 'none';
+  categories.textContent = `Newly detected categories: ${labels(comparison.categoryChanges.newlyDetected)}. No longer detected: ${labels(comparison.categoryChanges.noLongerDetected)}.`;
+  const list = document.createElement('ol');
+  list.className = 'comparison';
+  for (const change of comparison.changes.filter(({ type }) => type !== 'unchanged')) {
+    const item = document.createElement('li');
+    item.className = change.type;
+    const label = document.createElement('p');
+    label.className = 'change-label';
+    const text = document.createElement('p');
+    text.className = 'change-text';
+    if (change.type === 'modified') {
+      label.textContent = `Changed: ${change.previousId} → ${change.currentId}`;
+      change.words.forEach((segment, index) => {
+        if (index > 0) text.append(' ');
+        if (segment.type === 'same') text.append(segment.text);
+        else {
+          const mark = document.createElement(segment.type === 'added' ? 'ins' : 'del');
+          mark.textContent = segment.text;
+          text.append(mark);
+        }
+      });
+    } else {
+      label.textContent = change.type === 'added' ? `Added in newer version: ${change.currentId}` : `Removed from newer version: was ${change.previousId}`;
+      text.textContent = change.text;
+    }
+    item.append(label, text);
+    list.append(item);
+  }
+  if (!list.children.length) {
+    const same = document.createElement('p');
+    same.textContent = 'No paragraph wording changes were detected.';
+    output.append(limitation, summary, categories, same);
+  } else output.append(limitation, summary, categories, list);
+}
+
 async function compareVersion() {
   elements.dialogContent.replaceChildren();
   const heading = document.createElement('h2');
@@ -309,7 +339,8 @@ async function compareVersion() {
   const textarea = document.createElement('textarea');
   textarea.id = 'comparison-source';
   textarea.className = 'compare-input';
-  textarea.value = sampleV2;
+  textarea.placeholder = 'Paste the complete newer version here.';
+  textarea.value = project.document.method === sampleMethod ? SAMPLE_V2 : '';
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = 'Compare versions locally';
@@ -317,28 +348,11 @@ async function compareVersion() {
   button.addEventListener('click', async () => {
     const comparison = await runJob('comparing preserved versions', async (signal) => {
       const next = normaliseSource(textarea.value, { title: `${project.document.title} — comparison`, acquiredAt: new Date().toISOString(), method: 'comparison paste' });
+      if (next.paragraphs.length === 0) throw new RangeError('Paste the newer version before comparing.');
       if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       return compareSources(project.document, next);
     });
-    if (!comparison) return;
-    output.replaceChildren();
-    const limitation = document.createElement('p');
-    limitation.textContent = comparison.limitation;
-    const categories = document.createElement('p');
-    categories.textContent = `Newly detected categories: ${comparison.categoryChanges.newlyDetected.join(', ') || 'none'}. No longer detected: ${comparison.categoryChanges.noLongerDetected.join(', ') || 'none'}.`;
-    const list = document.createElement('ol');
-    list.className = 'comparison';
-    for (const change of comparison.changes.filter(({ type }) => type !== 'unchanged')) {
-      const item = document.createElement('li');
-      item.className = change.type;
-      item.textContent = `${change.type === 'added' ? 'Added in newer version' : 'Removed from newer version'}: ${change.text}`;
-      list.append(item);
-    }
-    if (!list.children.length) {
-      const same = document.createElement('p');
-      same.textContent = 'No paragraph wording changes were detected.';
-      output.append(limitation, categories, same);
-    } else output.append(limitation, categories, list);
+    if (comparison) renderComparison(comparison, output);
   });
   elements.dialogContent.append(heading, explanation, label, textarea, button, output);
   elements.dialog.showModal();
@@ -431,10 +445,12 @@ async function preparePack() {
   elements.dialog.showModal();
 }
 
-document.querySelector('#analyse-button').addEventListener('click', () => analyse(elements.input.value, elements.title.value));
+document.querySelector('#analyse-button').addEventListener('click', () => analyse(elements.input.value, elements.title.value, sourceMethod));
+elements.input.addEventListener('input', () => { sourceMethod = 'pasted text'; });
 document.querySelector('#sample-button').addEventListener('click', () => {
-  elements.title.value = 'Streambird subscription terms — synthetic version one';
-  elements.input.value = sample;
+  elements.title.value = SAMPLE_TITLE;
+  elements.input.value = SAMPLE_V1;
+  sourceMethod = sampleMethod;
   elements.input.focus();
   setStatus('Synthetic agreement loaded. Choose Number and analyse locally.');
 });
@@ -445,10 +461,11 @@ elements.file.addEventListener('change', async () => {
     if (file.size > 400_000) throw new RangeError('Source files are limited to 400,000 bytes.');
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
     const raw = await file.text();
-    return file.type === 'text/html' || /\.html?$/iu.test(file.name) ? plainTextFromHtml(raw) : raw;
+    return isHtmlFile(file) ? plainTextFromHtml(raw) : raw;
   });
   if (text !== null) {
     elements.input.value = text;
+    sourceMethod = isHtmlFile(file) ? 'local HTML file' : 'local text file';
     elements.title.value = file.name.slice(0, 160);
     setStatus('Local file extracted as plain text. Review it, then analyse locally.');
   }
