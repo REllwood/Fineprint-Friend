@@ -163,6 +163,17 @@ test('word differences rebuild both versions of a paragraph', () => {
   }
 });
 
+test('version comparison handles documents at the paragraph limit', () => {
+  const paragraphs = Array.from({ length: 2_000 }, (_, index) => `Paragraph ${index + 1} about the renewal date.`);
+  const previous = normaliseSource(paragraphs.join('\n\n'));
+  paragraphs[999] = 'Paragraph 1000 about the new renewal date.';
+  const changes = compareSources(previous, normaliseSource(paragraphs.join('\n\n'))).changes;
+  assert.equal(changes.length, 2_000);
+  assert.deepEqual(changes.filter(({ type }) => type !== 'unchanged').map(({ type, previousId, currentId }) => [type, previousId, currentId]), [['modified', 'p1000', 'p1000']]);
+  const shuffled = normaliseSource([...paragraphs].reverse().join('\n\n'));
+  assert.equal(compareSources(previous, shuffled).changes.filter(({ type }) => type === 'unchanged').length, 1);
+});
+
 test('fixtures hold the same synthetic agreement as the app', () => {
   const fixture = (name) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8').trimEnd();
   assert.equal(fixture('streambird-v1.txt'), SAMPLE_V1);

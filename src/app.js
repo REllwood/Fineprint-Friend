@@ -1,7 +1,8 @@
-import { CLAUSE_CATALOGUE, analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from './core.js';
+import { CLAUSE_CATALOGUE, MAX_DOCUMENT_CHARACTERS, analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from './core.js';
 import { SAMPLE_TITLE, SAMPLE_V1, SAMPLE_V2 } from './samples.js';
 
 const storageKey = 'fineprint-friend:v0.1';
+const MAX_FILE_BYTES = 5_000_000;
 const sampleMethod = 'synthetic sample';
 
 const elements = {
@@ -458,10 +459,16 @@ elements.file.addEventListener('change', async () => {
   const file = elements.file.files?.[0];
   if (!file) return;
   const text = await runJob('reading local source file', async (signal) => {
-    if (file.size > 400_000) throw new RangeError('Source files are limited to 400,000 bytes.');
+    // The document limit is on extracted text; the file limit only guards against huge downloads of markup.
+    if (file.size > MAX_FILE_BYTES) throw new RangeError(`Source files are limited to ${(MAX_FILE_BYTES / 1_000_000).toLocaleString('en-AU')} MB.`);
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
     const raw = await file.text();
-    return isHtmlFile(file) ? plainTextFromHtml(raw) : raw;
+    if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+    const extracted = isHtmlFile(file) ? plainTextFromHtml(raw) : raw;
+    if (extracted.length > MAX_DOCUMENT_CHARACTERS) {
+      throw new RangeError(`The file has ${extracted.length.toLocaleString('en-AU')} characters of text. Documents are limited to ${MAX_DOCUMENT_CHARACTERS.toLocaleString('en-AU')} characters.`);
+    }
+    return extracted;
   });
   if (text !== null) {
     elements.input.value = text;

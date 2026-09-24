@@ -20,6 +20,7 @@ Terms of service and privacy policies are long, and the parts that matter are sp
 - Links every reading prompt to its evidence, and says when the evidence is thin
 - Compares two versions of the same policy
 - Exports an annotated Markdown or print-ready pack with your questions
+- Handles documents up to 400,000 characters and 2,000 paragraphs (files up to 5 MB)
 
 ## Quick start
 
