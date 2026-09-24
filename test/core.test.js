@@ -27,6 +27,16 @@ test('source normalisation creates stable, bounded paragraph identifiers', () =>
   assert.throws(() => normaliseSource('x'.repeat(400_001)), /limited/i);
 });
 
+test('paragraph offsets point at the source text each paragraph came from', () => {
+  const document = normaliseSource('Hard-wrapped first\n   paragraph  with   gaps.\n\n\n  Second\tparagraph.\n \n\nThird.');
+  assert.deepEqual(document.paragraphs.map(({ text }) => text), ['Hard-wrapped first paragraph with gaps.', 'Second paragraph.', 'Third.']);
+  for (const paragraph of document.paragraphs) {
+    assert.equal(document.text.slice(paragraph.start, paragraph.end).replace(/\s+/gu, ' '), paragraph.text);
+  }
+  assert.deepEqual(normaliseSource('Same text.\n\nSame text.').paragraphs.map(({ start, end }) => [start, end]), [[0, 10], [12, 22]]);
+  assert.deepEqual(normaliseSource(' \n\n \n ').paragraphs, []);
+});
+
 test('every observation links to exact source evidence and states rule certainty', () => {
   const document = normaliseSource(versionOneText);
   const analysis = analyseSource(document);
