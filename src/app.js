@@ -255,10 +255,26 @@ function restore() {
   }
 }
 
+const blockElements = 'address,article,aside,blockquote,caption,dd,details,dialog,div,dl,dt,fieldset,figcaption,figure,footer,form,h1,h2,h3,h4,h5,h6,header,hgroup,hr,li,main,nav,ol,p,pre,section,summary,table,tr,ul';
+
+// A parsed document is never rendered, so innerText would lose paragraph breaks.
+// Rebuild them from the markup instead: blocks become blank-line separated paragraphs.
 function plainTextFromHtml(html) {
   const documentModel = new DOMParser().parseFromString(html, 'text/html');
-  documentModel.querySelectorAll('script,style,noscript,template').forEach((node) => node.remove());
-  return documentModel.body?.innerText ?? '';
+  const body = documentModel.body;
+  if (!body) return '';
+  body.querySelectorAll('script,style,noscript,template,svg,[hidden]').forEach((node) => node.remove());
+  const walker = documentModel.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.parentElement?.closest('pre')) node.data = node.data.replace(/\s+/gu, ' ');
+  }
+  body.querySelectorAll('br').forEach((node) => node.replaceWith('\n'));
+  body.querySelectorAll('td,th').forEach((cell) => { if (cell.nextElementSibling) cell.append(' | '); });
+  body.querySelectorAll(blockElements).forEach((node) => {
+    node.before('\n\n');
+    node.after('\n\n');
+  });
+  return body.textContent.replace(/[^\S\n]*\n[^\S\n]*\n\s*/gu, '\n\n').trim();
 }
 
 async function compareVersion() {
