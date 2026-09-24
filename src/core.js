@@ -128,6 +128,98 @@ export function groupObservations(observations) {
     .filter((group) => group.observations.length > 0);
 }
 
+const PAIRING_THRESHOLD = 0.5;
+const PAIRING_WINDOW = 20;
+const MAX_WORD_DIFF_CELLS = 250_000;
+
+function wordSimilarity(a, b) {
+  const wordsIn = (text) => new Set(text.toLocaleLowerCase('en-AU').match(/[\p{L}\p{N}]+/gu) ?? []);
+  const left = wordsIn(a);
+  const right = wordsIn(b);
+  if (left.size === 0 && right.size === 0) return 1;
+  let shared = 0;
+  for (const word of left) if (right.has(word)) shared += 1;
+  return (2 * shared) / (left.size + right.size);
+}
+
+// Within a run of removed and added paragraphs, pair up the ones that are clearly edits of each other.
+function pairEdits(removed, added) {
+  const pairs = [];
+  let nextAdded = 0;
+  for (let r = 0; r < removed.length; r += 1) {
+    for (let a = nextAdded; a < Math.min(added.length, nextAdded + PAIRING_WINDOW); a += 1) {
+      if (wordSimilarity(removed[r].text, added[a].text) >= PAIRING_THRESHOLD) {
+        pairs.push([r, a]);
+        nextAdded = a + 1;
+        break;
+      }
+    }
+  }
+  const result = [];
+  let r = 0;
+  let a = 0;
+  for (const [pairedRemoved, pairedAdded] of pairs) {
+    while (r < pairedRemoved) result.push(removed[r++]);
+    while (a < pairedAdded) result.push(added[a++]);
+    const before = removed[r++];
+    const after = added[a++];
+    result.push({ type: 'modified', previousId: before.previousId, currentId: after.currentId, previousText: before.text, text: after.text, words: diffWords(before.text, after.text) });
+  }
+  while (r < removed.length) result.push(removed[r++]);
+  while (a < added.length) result.push(added[a++]);
+  return result;
+}
+
+// Word-level changes between two paragraph texts. Segments hold whole words (type same, removed
+// or added); joining the same and added segments with single spaces rebuilds the current text,
+// and the same and removed segments the previous text.
+export function diffWords(previousText, currentText) {
+  const left = previousText.split(/\s+/u).filter(Boolean);
+  const right = currentText.split(/\s+/u).filter(Boolean);
+  if (left.length * right.length > MAX_WORD_DIFF_CELLS) {
+    return [{ type: 'removed', text: left.join(' ') }, { type: 'added', text: right.join(' ') }].filter(({ text }) => text);
+  }
+  const table = Array.from({ length: left.length + 1 }, () => new Uint16Array(right.length + 1));
+  for (let i = left.length - 1; i >= 0; i -= 1) {
+    for (let j = right.length - 1; j >= 0; j -= 1) {
+      table[i][j] = left[i] === right[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  const segments = [];
+  const push = (type, words) => {
+    if (words.length === 0) return;
+    const last = segments.at(-1);
+    if (last?.type === type) last.text += ` ${words.join(' ')}`;
+    else segments.push({ type, text: words.join(' ') });
+  };
+  let removedRun = [];
+  let addedRun = [];
+  const flush = () => {
+    push('removed', removedRun);
+    push('added', addedRun);
+    removedRun = [];
+    addedRun = [];
+  };
+  let i = 0;
+  let j = 0;
+  while (i < left.length || j < right.length) {
+    if (i < left.length && j < right.length && left[i] === right[j]) {
+      flush();
+      push('same', [right[j]]);
+      i += 1;
+      j += 1;
+    } else if (i < left.length && (j === right.length || table[i + 1][j] >= table[i][j + 1])) {
+      removedRun.push(left[i]);
+      i += 1;
+    } else {
+      addedRun.push(right[j]);
+      j += 1;
+    }
+  }
+  flush();
+  return segments;
+}
+
 export function compareSources(previous, current) {
   if (!previous?.paragraphs || !current?.paragraphs) throw new TypeError('Two normalised source documents are required.');
   const left = previous.paragraphs;
@@ -142,21 +234,30 @@ export function compareSources(previous, current) {
     }
   }
   const changes = [];
+  let removed = [];
+  let added = [];
+  const flush = () => {
+    changes.push(...pairEdits(removed, added));
+    removed = [];
+    added = [];
+  };
   let i = 0;
   let j = 0;
   while (i < left.length || j < right.length) {
     if (i < left.length && j < right.length && left[i].text === right[j].text) {
+      flush();
       changes.push({ type: 'unchanged', previousId: left[i].id, currentId: right[j].id, text: right[j].text });
       i += 1;
       j += 1;
     } else if (j < right.length && (i === left.length || table[i][j + 1] >= table[i + 1][j])) {
-      changes.push({ type: 'added', currentId: right[j].id, text: right[j].text });
+      added.push({ type: 'added', currentId: right[j].id, text: right[j].text });
       j += 1;
     } else {
-      changes.push({ type: 'removed', previousId: left[i].id, text: left[i].text });
+      removed.push({ type: 'removed', previousId: left[i].id, text: left[i].text });
       i += 1;
     }
   }
+  flush();
   const previousCategories = new Set(analyseSource(previous).observations.map(({ categoryId }) => categoryId));
   const currentCategories = new Set(analyseSource(current).observations.map(({ categoryId }) => categoryId));
   return {

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CLAUSE_CATALOGUE, analyseSource, compareSources, groupObservations, normaliseSource, readingPack, readingPackModel } from '../src/core.js';
+import { readFileSync } from 'node:fs';
+import { CLAUSE_CATALOGUE, analyseSource, compareSources, diffWords, groupObservations, normaliseSource, readingPack, readingPackModel } from '../src/core.js';
+import { SAMPLE_V1, SAMPLE_V2 } from '../src/samples.js';
 
 const versionOneText = `Synthetic subscription terms
 
@@ -109,10 +111,14 @@ test('absence is explicitly incomplete rather than a conclusion', () => {
   assert.match(analysis.limitation, /may still be present/i);
 });
 
-test('version comparison preserves additions and removals without legal interpretation', () => {
+test('version comparison preserves additions and edits without legal interpretation', () => {
   const comparison = compareSources(normaliseSource(versionOneText), normaliseSource(versionTwoText));
-  assert.ok(comparison.changes.some(({ type, text }) => type === 'removed' && text.includes('48 hours')));
-  assert.ok(comparison.changes.some(({ type, text }) => type === 'added' && text.includes('7 days')));
+  assert.deepEqual(comparison.changes.map(({ type }) => type), ['unchanged', 'unchanged', 'modified', 'modified', 'added']);
+  const cancellation = comparison.changes.find(({ type, previousText }) => type === 'modified' && previousText.includes('48 hours'));
+  assert.equal(cancellation.text, 'You may cancel at least 7 days before renewal.');
+  assert.deepEqual([cancellation.previousId, cancellation.currentId], ['p3', 'p3']);
+  assert.deepEqual(cancellation.words.filter(({ type }) => type !== 'same'), [{ type: 'removed', text: '48 hours' }, { type: 'added', text: '7 days' }]);
+  assert.ok(comparison.changes.some(({ type, text }) => type === 'added' && text.startsWith('Disputes use arbitration')));
   assert.ok(comparison.categoryChanges.newlyDetected.includes('disputes'));
   assert.match(comparison.limitation, /without interpreting/i);
 });
@@ -121,9 +127,48 @@ test('version comparison treats case and punctuation edits as wording changes', 
   const previous = normaliseSource('Cancellation requires notice.');
   const current = normaliseSource('cancellation requires notice!');
   const changes = compareSources(previous, current).changes;
-  assert.deepEqual(changes.map(({ type }) => type), ['added', 'removed']);
-  assert.equal(changes.find(({ type }) => type === 'removed').text, 'Cancellation requires notice.');
-  assert.equal(changes.find(({ type }) => type === 'added').text, 'cancellation requires notice!');
+  assert.deepEqual(changes.map(({ type }) => type), ['modified']);
+  assert.equal(changes[0].previousText, 'Cancellation requires notice.');
+  assert.equal(changes[0].text, 'cancellation requires notice!');
+  assert.deepEqual(changes[0].words, [
+    { type: 'removed', text: 'Cancellation' },
+    { type: 'added', text: 'cancellation' },
+    { type: 'same', text: 'requires' },
+    { type: 'removed', text: 'notice.' },
+    { type: 'added', text: 'notice!' }
+  ]);
+});
+
+test('version comparison does not pair unrelated paragraphs', () => {
+  const changes = compareSources(normaliseSource('Intro.\n\nWe may share data with partners.'), normaliseSource('Intro.\n\nArbitration applies to every dispute.')).changes;
+  assert.deepEqual(changes.map(({ type }) => type), ['unchanged', 'removed', 'added']);
+});
+
+test('word differences rebuild both versions of a paragraph', () => {
+  const pairs = [
+    ['You may cancel at least 48 hours before renewal.', 'You may cancel at least 7 days before renewal.'],
+    ['a b c', 'a c'],
+    ['a b', 'a'],
+    ['a', 'b a'],
+    ['', 'New text only.'],
+    ['Old text only.', ''],
+    ['one two three four', 'four three two one']
+  ];
+  const rebuild = (segments, kept) => segments.filter(({ type }) => type === 'same' || type === kept).map(({ text }) => text).join(' ');
+  for (const [previousText, currentText] of pairs) {
+    const segments = diffWords(previousText, currentText);
+    assert.equal(rebuild(segments, 'removed'), previousText);
+    assert.equal(rebuild(segments, 'added'), currentText);
+    assert.ok(segments.every(({ text }) => text && text === text.trim()));
+  }
+});
+
+test('fixtures hold the same synthetic agreement as the app', () => {
+  const fixture = (name) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8').trimEnd();
+  assert.equal(fixture('streambird-v1.txt'), SAMPLE_V1);
+  assert.equal(fixture('streambird-v2.txt'), SAMPLE_V2);
+  const comparison = compareSources(normaliseSource(SAMPLE_V1), normaliseSource(SAMPLE_V2));
+  assert.deepEqual(comparison.categoryChanges.newlyDetected, ['disputes']);
 });
 
 test('reading pack includes evidence, source and explicit limitations without a rating', () => {
