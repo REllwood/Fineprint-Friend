@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyseSource, compareSources, normaliseSource, readingPack } from '../src/core.js';
+import { CLAUSE_CATALOGUE, analyseSource, compareSources, groupObservations, normaliseSource, readingPack } from '../src/core.js';
 
 const versionOneText = `Synthetic subscription terms
 
@@ -89,6 +89,18 @@ test('catalogue avoids common look-alike words', () => {
   assert.deepEqual(categoriesIn('Products sold in our stores are listed online.'), []);
   assert.deepEqual(categoriesIn('The government publishes guidance.'), []);
   assert.deepEqual(categoriesIn('To the extent described by applicable law, see the order page.'), []);
+});
+
+test('guide groups observations by category in catalogue order', () => {
+  const document = normaliseSource(versionTwoText);
+  const analysis = analyseSource(document);
+  const groups = groupObservations(analysis.observations);
+  const detected = CLAUSE_CATALOGUE.map(({ id }) => id).filter((id) => analysis.observations.some(({ categoryId }) => categoryId === id));
+  assert.deepEqual(groups.map(({ categoryId }) => categoryId), detected);
+  assert.equal(groups.reduce((total, group) => total + group.observations.length, 0), analysis.observations.length);
+  assert.deepEqual(groups.find(({ categoryId }) => categoryId === 'renewal').observations.map(({ paragraphIds }) => paragraphIds[0]), ['p2', 'p3']);
+  const pack = readingPack({ document, analysis, questions: [] });
+  assert.equal(pack.match(/^### Renewal and recurring terms$/gmu).length, 1);
 });
 
 test('absence is explicitly incomplete rather than a conclusion', () => {

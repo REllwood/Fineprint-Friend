@@ -122,6 +122,12 @@ export function analyseSource(document) {
   };
 }
 
+export function groupObservations(observations) {
+  return CLAUSE_CATALOGUE
+    .map(({ id, label, prompt }) => ({ categoryId: id, category: label, prompt, observations: observations.filter(({ categoryId }) => categoryId === id) }))
+    .filter((group) => group.observations.length > 0);
+}
+
 export function compareSources(previous, current) {
   if (!previous?.paragraphs || !current?.paragraphs) throw new TypeError('Two normalised source documents are required.');
   const left = previous.paragraphs;
@@ -187,8 +193,11 @@ export function readingPack(project) {
     ''
   ];
   if (project.analysis.observations.length === 0) lines.push('No catalogue categories were detected. This does not mean they are absent.', '');
-  for (const observation of project.analysis.observations) {
-    lines.push(`### ${escapeMarkdown(observation.category)}`, '', escapeMarkdown(observation.prompt), '', `Evidence ${observation.paragraphIds.map(escapeMarkdown).join(', ')} (${escapeMarkdown(observation.certainty)}):`, '', `> ${escapeMarkdown(observation.evidence)}`, '', escapeMarkdown(observation.rationale), '');
+  for (const group of groupObservations(project.analysis.observations)) {
+    lines.push(`### ${escapeMarkdown(group.category)}`, '', escapeMarkdown(group.prompt), '');
+    for (const observation of group.observations) {
+      lines.push(`Evidence ${observation.paragraphIds.map(escapeMarkdown).join(', ')} (${escapeMarkdown(observation.certainty)}):`, '', `> ${escapeMarkdown(observation.evidence)}`, '', escapeMarkdown(observation.rationale), '');
+    }
   }
   lines.push('## My questions', '');
   if (questions.length === 0) lines.push('- No questions recorded.');
