@@ -198,6 +198,44 @@ async function analyse(text, title, method = 'pasted text') {
   }
 }
 
+function showIntake() {
+  project = null;
+  try { localStorage.removeItem(storageKey); } catch { /* Storage unavailable; nothing saved to clear. */ }
+  elements.search.value = '';
+  elements.title.value = 'Untitled supplied document';
+  elements.input.value = '';
+  elements.room.hidden = true;
+  elements.intake.hidden = false;
+  elements.input.focus();
+  setStatus('Previous project cleared. Paste or open the next source.');
+}
+
+function confirmNewDocument() {
+  elements.dialogContent.replaceChildren();
+  const heading = document.createElement('h2');
+  heading.textContent = 'Start a new document?';
+  const count = project.questions.length;
+  const explanation = document.createElement('p');
+  explanation.textContent = `This clears “${project.document.title}”${count ? ` and your ${count} ${count === 1 ? 'question' : 'questions'}` : ''} from this browser. Prepare a reading pack first if you want to keep a copy.`;
+  const actions = document.createElement('div');
+  actions.className = 'dialog-actions';
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'primary';
+  clear.textContent = 'Clear and start again';
+  clear.addEventListener('click', () => {
+    elements.dialog.close();
+    showIntake();
+  });
+  const keep = document.createElement('button');
+  keep.type = 'button';
+  keep.textContent = 'Keep current project';
+  keep.addEventListener('click', () => elements.dialog.close());
+  actions.append(clear, keep);
+  elements.dialogContent.append(heading, explanation, actions);
+  elements.dialog.showModal();
+}
+
 function restore() {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -358,6 +396,7 @@ elements.questionForm.addEventListener('submit', (event) => {
 });
 document.querySelector('#compare-button').addEventListener('click', compareVersion);
 document.querySelector('#export-button').addEventListener('click', preparePack);
+document.querySelector('#new-document-button').addEventListener('click', confirmNewDocument);
 document.querySelector('#limitations-button').addEventListener('click', () => {
   elements.dialogContent.replaceChildren();
   const heading = document.createElement('h2');
